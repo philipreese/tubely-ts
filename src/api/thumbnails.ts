@@ -39,7 +39,11 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
         throw new BadRequestError("Thumbnail is too large");
     }
 
-    const ext = getExtFromMediaType(file.type);
+    const mediaType = file.type;
+    if (mediaType !== "image/jpeg" && mediaType !== "image/png") {
+        throw new BadRequestError("Invalid file type");
+    }
+    const ext = getExtFromMediaType(mediaType);
     const filename = `${videoId}${ext}`;
 
     const thumbnailPath = getAssetDiskPath(cfg, filename);
