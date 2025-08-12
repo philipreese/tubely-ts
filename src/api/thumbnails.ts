@@ -4,38 +4,7 @@ import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
-import { getThumbnailURL } from "./assets";
-
-type Thumbnail = {
-    data: ArrayBuffer;
-    mediaType: string;
-};
-
-const videoThumbnails: Map<string, Thumbnail> = new Map();
-
-export async function handlerGetThumbnail(cfg: ApiConfig, req: BunRequest) {
-    const { videoId } = req.params as { videoId?: string };
-    if (!videoId) {
-        throw new BadRequestError("Invalid video ID");
-    }
-
-    const video = getVideo(cfg.db, videoId);
-    if (!video) {
-        throw new NotFoundError("Couldn't find video");
-    }
-
-    const thumbnail = videoThumbnails.get(videoId);
-    if (!thumbnail) {
-        throw new NotFoundError("Thumbnail not found");
-    }
-
-    return new Response(thumbnail.data, {
-        headers: {
-            "Content-Type": thumbnail.mediaType,
-            "Cache-Control": "no-store",
-        },
-    });
-}
+import { getDataURL } from "./assets";
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     const { videoId } = req.params as { videoId?: string };
@@ -59,6 +28,8 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
 
     const mediaType = file.type;
     const imageData = await file.arrayBuffer();
+    const imageBufferString = Buffer.from(imageData).toString("base64");
+    const dataURL = getDataURL(mediaType, imageBufferString);
 
     const video = getVideo(cfg.db, videoId);
     if (!video) {
@@ -69,12 +40,7 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
         throw new UserForbiddenError("Unauthorized");
     }
 
-    videoThumbnails.set(videoId, {
-        data: imageData,
-        mediaType,
-    });
-
-    video.thumbnailURL = getThumbnailURL(cfg, videoId);
+    video.thumbnailURL = dataURL;
     updateVideo(cfg.db, video);
 
     return respondWithJSON(200, video);
