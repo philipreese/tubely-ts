@@ -4,7 +4,11 @@ import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
-import { getDataURL } from "./assets";
+import {
+    getAssetDiskPath,
+    getExtFromMediaType,
+    getThumbnailURL,
+} from "./assets";
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     const { videoId } = req.params as { videoId?: string };
@@ -14,6 +18,15 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
 
     const token = getBearerToken(req.headers);
     const userID = validateJWT(token, cfg.jwtSecret);
+
+    const video = getVideo(cfg.db, videoId);
+    if (!video) {
+        throw new NotFoundError("Unable to get video");
+    }
+
+    if (video.userID != userID) {
+        throw new UserForbiddenError("Unauthorized");
+    }
 
     const formData = await req.formData();
     const file = formData.get("thumbnail");
@@ -26,21 +39,13 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
         throw new BadRequestError("Thumbnail is too large");
     }
 
-    const mediaType = file.type;
-    const imageData = await file.arrayBuffer();
-    const imageBufferString = Buffer.from(imageData).toString("base64");
-    const dataURL = getDataURL(mediaType, imageBufferString);
+    const ext = getExtFromMediaType(file.type);
+    const filename = `${videoId}${ext}`;
 
-    const video = getVideo(cfg.db, videoId);
-    if (!video) {
-        throw new NotFoundError("Unable to get video");
-    }
+    const thumbnailPath = getAssetDiskPath(cfg, filename);
+    await Bun.write(thumbnailPath, file);
 
-    if (video.userID != userID) {
-        throw new UserForbiddenError("Unauthorized");
-    }
-
-    video.thumbnailURL = dataURL;
+    video.thumbnailURL = getThumbnailURL(cfg, filename);
     updateVideo(cfg.db, video);
 
     return respondWithJSON(200, video);
