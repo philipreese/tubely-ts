@@ -9,6 +9,7 @@ import {
     getExtFromMediaType,
     getThumbnailURL,
 } from "./assets";
+import { randomBytes } from "crypto";
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     const { videoId } = req.params as { videoId?: string };
@@ -44,7 +45,7 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
         throw new BadRequestError("Invalid file type");
     }
     const ext = getExtFromMediaType(mediaType);
-    const filename = `${videoId}${ext}`;
+    const filename = `${randomBytes(32).toString("base64url")}${ext}`;
 
     const thumbnailPath = getAssetDiskPath(cfg, filename);
     await Bun.write(thumbnailPath, file);
